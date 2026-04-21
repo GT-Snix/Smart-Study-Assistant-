@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-family: 'DM Sans', sans-serif; }
+  body {
+    background-color: #0e0f14;
+    color: #e8eaf0;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: #16181f; }
+  ::-webkit-scrollbar-thumb { background: #2e3040; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #f5c842; }
+}
+
+@layer components {
+  .card {
+    @apply bg-surface rounded-2xl border border-border p-5;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+  }
+  .card2 {
+    @apply bg-surface2 rounded-2xl border border-border p-5;
+  }
+  .btn-primary {
+    @apply bg-accent text-bg font-semibold px-5 py-2.5 rounded-xl
+           hover:brightness-110 active:scale-95 transition-all duration-200
+           disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+  .btn-ghost {
+    @apply bg-transparent border border-border text-gray-300 px-5 py-2.5 rounded-xl
+           hover:border-accent hover:text-accent transition-all duration-200;
+  }
+  .input {
+    @apply bg-surface2 border border-border rounded-xl px-4 py-2.5 text-sm
+           text-white placeholder-gray-500 focus:outline-none focus:border-accent
+           focus:ring-1 focus:ring-accent/30 transition-all w-full;
+  }
+  .label {
+    @apply text-xs font-medium text-gray-400 mb-1.5 block uppercase tracking-wide;
+  }
+  .badge {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+}
+
+/* 3D Flashcard flip */
+.perspective { perspective: 1000px; }
+.card-inner { transform-style: preserve-3d; transition: transform 0.6s cubic-bezier(0.4,0,0.2,1); }
+.card-inner.flipped { transform: rotateY(180deg); }
+.card-face { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.card-back { transform: rotateY(180deg); }
+
+/* Shimmer skeleton */
+.shimmer {
+  background: linear-gradient(90deg, #16181f 25%, #1d2028 50%, #16181f 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+@keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+
+/* Gold glow pulse on ring */
+@keyframes ring-glow { 0%, 100% { filter: drop-shadow(0 0 6px #f5c842aa); } 50% { filter: drop-shadow(0 0 16px #f5c842); } }
+.ring-glow { animation: ring-glow 2s ease-in-out infinite; }
