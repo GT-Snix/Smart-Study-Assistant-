@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { Sparkles, BookOpen, Calendar, Copy } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Sparkles, ChevronRight, BookOpen, Calendar, Clock, Layers, Copy, UserCircle2 } from 'lucide-react';
 import useAppStore from '../../store/useAppStore';
 import useAI from '../../hooks/useAI';
 import { parseJSON } from '../../utils/parseAI';
@@ -28,22 +28,11 @@ const Setup = () => {
   const { generate, loading } = useAI();
   const navigate = useNavigate();
   const [localSubtopics, setLocalSubtopics] = useState(store.subtopics.join(', '));
-  const [userName, setUserName] = useState('');
-  const [showProfile, setShowProfile] = useState(false);
 
-  // Auto-init user on mount if not already created
+  // Load study data from backend on mount
   useEffect(() => {
-    if (!store.currentUser) {
-      setShowProfile(true);
-    }
-  }, [store.currentUser]);
-
-  const handleCreateProfile = () => {
-    if (!userName.trim()) { toast.error('Please enter your name.'); return; }
-    const user = store.initUser(userName.trim());
-    toast.success(`Welcome, ${user.name}! Your ID is ${user.uniqueId}`);
-    setShowProfile(false);
-  };
+    store.loadStudyData();
+  }, []);
 
   const copyUniqueId = () => {
     if (store.currentUser?.uniqueId) {
@@ -57,17 +46,11 @@ const Setup = () => {
       toast.error('Please enter a subject and chapter name.');
       return;
     }
-    const apiKey = store.apiKey || localStorage.getItem('or_key');
-    if (!apiKey) {
-      toast.error('API key is missing! Please add it in Settings.');
-      return;
-    }
     const subtopicsArr = localSubtopics.split(',').map((s) => s.trim()).filter(Boolean);
     store.setSubtopics(subtopicsArr);
 
     toast.loading('Generating your study content…', { id: 'gen' });
     try {
-      // Parallel AI calls
       const [notesText, flashcardsText, plannerText, quizText] = await Promise.all([
         generate(
           `Generate structured ${store.noteStyle} study notes for:\nSubject: ${store.subject}\nChapter: ${store.chapter}\nLevel: ${store.level}\nSubtopics: ${subtopicsArr.join(', ') || 'all main topics'}\n\nFormat as markdown with ## headings, bullet points, key terms bolded.`,
@@ -92,38 +75,15 @@ const Setup = () => {
       store.setPlanner(parseJSON(plannerText, []));
       store.setQuizQuestions(parseJSON(quizText, []));
 
+      // Sync to backend
+      setTimeout(() => store.syncStudyData(), 500);
+
       toast.success('Study content ready!', { id: 'gen' });
       navigate('/student/notes');
     } catch (e) {
       toast.error(e.message || 'Generation failed', { id: 'gen' });
     }
   };
-
-  // ── Profile creation overlay ──
-  if (showProfile && !store.currentUser) {
-    return (
-      <motion.div variants={pageVariants} initial="initial" animate="animate" className="space-y-6 max-w-md mx-auto">
-        <div className="text-center">
-          <UserCircle2 size={56} className="mx-auto text-accent mb-4" />
-          <h1 className="text-3xl font-bold font-display text-white">Welcome!</h1>
-          <p className="text-gray-400 mt-2 text-sm">Create your profile to get started. You'll receive a unique 6-character ID to share with teachers, parents, and buddies.</p>
-        </div>
-        <div className="card space-y-4">
-          <div>
-            <label className="label">Your Name *</label>
-            <input
-              className="input"
-              placeholder="e.g. John Doe"
-              value={userName}
-              onChange={(e) => setUserName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleCreateProfile()}
-            />
-          </div>
-          <Button fullWidth onClick={handleCreateProfile} icon={Sparkles}>Create My Profile</Button>
-        </div>
-      </motion.div>
-    );
-  }
 
   return (
     <motion.div variants={pageVariants} initial="initial" animate="animate" className="space-y-8">
@@ -147,10 +107,8 @@ const Setup = () => {
               <p className="text-gray-500 text-[10px] font-mono">ID: {store.currentUser.uniqueId}</p>
             </div>
           </div>
-          <button
-            onClick={copyUniqueId}
-            className="flex items-center gap-2 px-3 py-2 bg-accent/10 hover:bg-accent/20 text-accent text-xs font-medium rounded-xl border border-accent/20 transition-all"
-          >
+          <button onClick={copyUniqueId}
+            className="flex items-center gap-2 px-3 py-2 bg-accent/10 hover:bg-accent/20 text-accent text-xs font-medium rounded-xl border border-accent/20 transition-all">
             <Copy size={12} /> Copy ID
           </button>
         </motion.div>
@@ -167,45 +125,24 @@ const Setup = () => {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left column */}
         <div className="space-y-5">
           <div className="card space-y-4">
             <h2 className="text-sm font-semibold text-white uppercase tracking-wide">Subject Details</h2>
-            <div>
-              <label className="label">Subject *</label>
-              <input className="input" placeholder="e.g. Biology, Mathematics" value={store.subject} onChange={(e) => store.setSubject(e.target.value)} />
-            </div>
-            <div>
-              <label className="label">Chapter / Topic *</label>
-              <input className="input" placeholder="e.g. Chapter 5: Genetics" value={store.chapter} onChange={(e) => store.setChapter(e.target.value)} />
-            </div>
-            <div>
-              <label className="label">Subtopics (comma-separated)</label>
-              <input className="input" placeholder="e.g. Mitosis, Meiosis, DNA" value={localSubtopics} onChange={(e) => setLocalSubtopics(e.target.value)} />
-            </div>
+            <div><label className="label">Subject *</label><input className="input" placeholder="e.g. Biology, Mathematics" value={store.subject} onChange={(e) => store.setSubject(e.target.value)} /></div>
+            <div><label className="label">Chapter / Topic *</label><input className="input" placeholder="e.g. Chapter 5: Genetics" value={store.chapter} onChange={(e) => store.setChapter(e.target.value)} /></div>
+            <div><label className="label">Subtopics (comma-separated)</label><input className="input" placeholder="e.g. Mitosis, Meiosis, DNA" value={localSubtopics} onChange={(e) => setLocalSubtopics(e.target.value)} /></div>
           </div>
 
           <div className="card space-y-4">
             <h2 className="text-sm font-semibold text-white uppercase tracking-wide">Schedule</h2>
-            <div>
-              <label className="label">Exam Date</label>
-              <input
-                type="date" className="input"
-                value={store.examDate}
-                onChange={(e) => store.setExamDate(e.target.value)}
-                min={new Date().toISOString().split('T')[0]}
-              />
-            </div>
+            <div><label className="label">Exam Date</label><input type="date" className="input" value={store.examDate} onChange={(e) => store.setExamDate(e.target.value)} min={new Date().toISOString().split('T')[0]} /></div>
             <div>
               <label className="label">Hours per Day: <span className="text-accent font-bold">{store.hoursPerDay}h</span></label>
-              <input type="range" min={1} max={10} value={store.hoursPerDay}
-                onChange={(e) => store.setHoursPerDay(Number(e.target.value))}
-                className="w-full accent-yellow-400 cursor-pointer" />
+              <input type="range" min={1} max={10} value={store.hoursPerDay} onChange={(e) => store.setHoursPerDay(Number(e.target.value))} className="w-full accent-yellow-400 cursor-pointer" />
             </div>
           </div>
         </div>
 
-        {/* Right column */}
         <div className="space-y-5">
           <div className="card space-y-4">
             <h2 className="text-sm font-semibold text-white uppercase tracking-wide">Learning Preferences</h2>
@@ -233,12 +170,11 @@ const Setup = () => {
             </div>
           </div>
 
-          {/* Quick templates */}
           <div className="card space-y-3">
             <h2 className="text-sm font-semibold text-white uppercase tracking-wide">Quick Templates</h2>
             <div className="flex flex-wrap gap-2">
               {TEMPLATES.map((t) => (
-                <button key={t} onClick={() => { store.setChapter(t); }}
+                <button key={t} onClick={() => store.setChapter(t)}
                   className="px-3 py-1.5 bg-surface2 rounded-lg border border-border text-xs text-gray-400 hover:text-accent hover:border-accent/40 transition-all">
                   {t}
                 </button>

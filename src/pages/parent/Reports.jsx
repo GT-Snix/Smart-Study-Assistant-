@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Download } from 'lucide-react';
 import useAppStore from '../../store/useAppStore';
@@ -9,23 +9,13 @@ import toast from 'react-hot-toast';
 const pageVariants = { initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0 } };
 
 const Reports = () => {
-  const { linkedChildren, getChildData } = useAppStore();
+  const { childrenData, fetchChildProgress } = useAppStore();
 
-  const childrenData = linkedChildren.map((c) => {
-    const data = getChildData(c.uniqueId);
-    return {
-      ...c,
-      score: data?.avgScore || 0,
-      streak: data?.streak || 0,
-      quizCount: data?.quizCount || 0,
-      totalScore: data?.totalScore || 0,
-      lastActive: data?.lastActive?.split('T')[0] || '—',
-    };
-  });
+  useEffect(() => { fetchChildProgress(); }, []);
 
   const handleExport = () => {
     if (!childrenData.length) { toast.error('No data to export.'); return; }
-    const csv = ['Name,UniqueID,AvgScore,Streak,Quizzes,LastActive', ...childrenData.map((s) => `${s.name},${s.uniqueId},${s.score}%,${s.streak}d,${s.quizCount},${s.lastActive}`)].join('\n');
+    const csv = ['Name,UniqueID,AvgScore,Streak,Quizzes,LastActive', ...childrenData.map((s) => `${s.name},${s.uniqueId},${s.avgScore || 0}%,${s.streak || 0}d,${s.quizCount || 0},${s.lastActive ? new Date(s.lastActive).toLocaleDateString() : '-'}`)].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = 'child_reports.csv'; a.click();
@@ -46,11 +36,11 @@ const Reports = () => {
       {childrenData.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
           {childrenData.map((s, i) => (
-            <motion.div key={s.uniqueId} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}
+            <motion.div key={s._id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}
               className="card space-y-4">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-accent/20 to-purple/20 flex items-center justify-center text-sm font-bold text-white">
-                  {s.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                  {s.avatar || s.name?.slice(0, 2).toUpperCase()}
                 </div>
                 <div>
                   <p className="text-white font-semibold">{s.name}</p>
@@ -60,25 +50,16 @@ const Reports = () => {
               <div>
                 <div className="flex justify-between text-xs text-gray-400 mb-1.5">
                   <span>Avg Score</span>
-                  <span className={`font-bold ${s.score >= 80 ? 'text-success' : s.score >= 70 ? 'text-accent' : 'text-danger'}`}>{s.score}%</span>
+                  <span className={`font-bold ${(s.avgScore||0) >= 80 ? 'text-success' : (s.avgScore||0) >= 70 ? 'text-accent' : 'text-danger'}`}>{s.avgScore || 0}%</span>
                 </div>
-                <ProgressBar value={s.score} max={100} color={s.score >= 80 ? 'success' : s.score >= 70 ? 'accent' : 'danger'} />
+                <ProgressBar value={s.avgScore || 0} max={100} color={(s.avgScore||0) >= 80 ? 'success' : (s.avgScore||0) >= 70 ? 'accent' : 'danger'} />
               </div>
               <div className="grid grid-cols-3 gap-2 text-xs text-gray-400">
-                <div className="bg-surface2 rounded-lg p-2 text-center">
-                  <p className="text-white font-bold">{s.streak}</p>
-                  <p>Streak</p>
-                </div>
-                <div className="bg-surface2 rounded-lg p-2 text-center">
-                  <p className="text-white font-bold">{s.quizCount}</p>
-                  <p>Quizzes</p>
-                </div>
-                <div className="bg-surface2 rounded-lg p-2 text-center">
-                  <p className={`font-bold ${s.score >= 70 ? 'text-success' : 'text-danger'}`}>{s.score >= 70 ? 'On Track' : 'At Risk'}</p>
-                  <p>Status</p>
-                </div>
+                <div className="bg-surface2 rounded-lg p-2 text-center"><p className="text-white font-bold">{s.streak || 0}</p><p>Streak</p></div>
+                <div className="bg-surface2 rounded-lg p-2 text-center"><p className="text-white font-bold">{s.quizCount || 0}</p><p>Quizzes</p></div>
+                <div className="bg-surface2 rounded-lg p-2 text-center"><p className={`font-bold ${(s.avgScore||0) >= 70 ? 'text-success' : 'text-danger'}`}>{(s.avgScore||0) >= 70 ? 'On Track' : 'At Risk'}</p><p>Status</p></div>
               </div>
-              <p className="text-[10px] text-gray-600">Last active: {s.lastActive}</p>
+              <p className="text-[10px] text-gray-600">Last active: {s.lastActive ? new Date(s.lastActive).toLocaleDateString() : '—'}</p>
             </motion.div>
           ))}
         </div>

@@ -1,18 +1,17 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { generateUniqueId } from '../utils/uniqueId';
+import api from '../utils/api';
 
 const useAppStore = create(
   persist(
     (set, get) => ({
-      // ── Auth & Role
-      role: 'student',
-      apiKey: '',
+      // ── Auth State ──
+      token: null,
+      currentUser: null, // { _id, name, email, role, uniqueId, avatar, children, students, buddies }
+      isAuthenticated: false,
+      authLoading: false,
 
-      // ── Current User Profile (created on first load)
-      currentUser: null, // { uniqueId, name, role, avatar, createdAt }
-
-      // ── Study Setup
+      // ── Study Setup (local UI state) ──
       subject: '',
       chapter: '',
       examDate: '',
@@ -21,17 +20,15 @@ const useAppStore = create(
       subtopics: [],
       noteStyle: 'concise',
 
-      // ── Generated Content
+      // ── Generated Content (synced with backend) ──
       notes: '',
       flashcards: [],
       planner: [],
-
-      // ── Quiz
       quizQuestions: [],
       quizState: null,
       scores: [],
 
-      // ── Progress
+      // ── Progress ──
       cardsStudied: 0,
       bookmarked: [],
       weakTopics: {},
@@ -39,77 +36,104 @@ const useAppStore = create(
       streak: 0,
       ratings: {},
 
-      // ── Pomodoro
+      // ── Pomodoro (local only) ──
       pomodoroTime: 1500,
       pomodoroRunning: false,
       pomodoroMode: 'study',
       pomoSessions: 0,
 
-      // ── Teacher Data (real students, no mocks)
-      students: [],       // [{ uniqueId, name, subject, score, streak, status, lastSeen, linkedAt }]
-      assignments: [],     // [{ id, title, subject, dueDate, status, assignedTo: [uniqueId], submissions: [] }]
-      customQuestions: [],
-      sharedNotes: [],
+      // ── Teacher data (fetched from API) ──
+      students: [],
+      assignments: [],
 
-      // ── Parent Data (linked children)
-      linkedChildren: [], // [{ uniqueId, name, linkedAt }]
+      // ── Parent data (fetched from API) ──
+      childrenData: [],
 
-      // ── Buddy Data
-      buddyRequests: [],   // [{ id, fromId, fromName, subject, status, createdAt }]
-      challengeHistory: [], // [{ id, opponentId, opponentName, subject, myScore, theirScore, date }]
-      studySessions: [],   // [{ id, buddyId, buddyName, subject, date, time, type }]
+      // ── Buddy ──
+      challengeHistory: [],
+      studySessions: [],
 
-      // ── Reminders (parent)
+      // ── Leaderboard ──
+      leaderboard: [],
+
+      // ── Reminders (local for now) ──
       reminders: [],
 
-      // ── Leaderboard (computed from real users — stored registry)
-      userRegistry: {},   // { [uniqueId]: { name, avatar, totalScore, streak, quizCount, lastActive } }
-
       // ──────────────────────────────────────────────────────────────
-      // ── Auth & User Actions
+      // ── AUTH ACTIONS ──
       // ──────────────────────────────────────────────────────────────
 
-      initUser: (name) => {
-        const existing = get().currentUser;
-        if (existing) return existing;
-        const user = {
-          uniqueId: generateUniqueId(),
-          name: name || 'Student',
-          role: get().role,
-          avatar: (name || 'ST').slice(0, 2).toUpperCase(),
-          createdAt: new Date().toISOString(),
-        };
-        // Also register self in leaderboard registry
-        const registry = { ...get().userRegistry };
-        registry[user.uniqueId] = {
-          name: user.name,
-          avatar: user.avatar,
-          totalScore: 0,
-          streak: 0,
-          quizCount: 0,
-          lastActive: new Date().toISOString(),
-        };
-        set({ currentUser: user, userRegistry: registry });
-        return user;
-      },
-
-      updateUserName: (name) => {
-        const user = get().currentUser;
-        if (!user) return;
-        const avatar = name.slice(0, 2).toUpperCase();
-        const updated = { ...user, name, avatar };
-        const registry = { ...get().userRegistry };
-        if (registry[user.uniqueId]) {
-          registry[user.uniqueId] = { ...registry[user.uniqueId], name, avatar };
+      register: async (name, email, password, role) => {
+        set({ authLoading: true });
+        try {
+          const res = await api.post('/auth/register', { name, email, password, role });
+          localStorage.setItem('minxy_token', res.token);
+          set({
+            token: res.token,
+            currentUser: res.data,
+            isAuthenticated: true,
+            authLoading: false,
+          });
+          return { success: true };
+        } catch (err) {
+          set({ authLoading: false });
+          return { error: err.message };
         }
-        set({ currentUser: updated, userRegistry: registry });
       },
 
-      setRole: (role) => set({ role }),
-      setApiKey: (apiKey) => set({ apiKey }),
+      login: async (email, password) => {
+        set({ authLoading: true });
+        try {
+          const res = await api.post('/auth/login', { email, password });
+          localStorage.setItem('minxy_token', res.token);
+          set({
+            token: res.token,
+            currentUser: res.data,
+            isAuthenticated: true,
+            authLoading: false,
+          });
+          return { success: true };
+        } catch (err) {
+          set({ authLoading: false });
+          return { error: err.message };
+        }
+      },
+
+      logout: () => {
+        localStorage.removeItem('minxy_token');
+        set({
+          token: null,
+          currentUser: null,
+          isAuthenticated: false,
+          notes: '',
+          flashcards: [],
+          planner: [],
+          quizQuestions: [],
+          quizState: null,
+          scores: [],
+          students: [],
+          assignments: [],
+          childrenData: [],
+          leaderboard: [],
+          challengeHistory: [],
+          studySessions: [],
+        });
+      },
+
+      loadUser: async () => {
+        const token = localStorage.getItem('minxy_token');
+        if (!token) return;
+        try {
+          const res = await api.get('/auth/me');
+          set({ token, currentUser: res.data, isAuthenticated: true });
+        } catch {
+          localStorage.removeItem('minxy_token');
+          set({ token: null, currentUser: null, isAuthenticated: false });
+        }
+      },
 
       // ──────────────────────────────────────────────────────────────
-      // ── Study Setup
+      // ── STUDY SETUP (local) ──
       // ──────────────────────────────────────────────────────────────
 
       setSubject: (subject) => set({ subject }),
@@ -121,36 +145,89 @@ const useAppStore = create(
       setNoteStyle: (noteStyle) => set({ noteStyle }),
 
       // ──────────────────────────────────────────────────────────────
-      // ── Generated Content
+      // ── CONTENT (set locally, synced to backend) ──
       // ──────────────────────────────────────────────────────────────
 
       setNotes: (notes) => set({ notes }),
       setFlashcards: (flashcards) => set({ flashcards }),
       setPlanner: (planner) => set({ planner }),
-
       setQuizQuestions: (quizQuestions) => set({ quizQuestions }),
       setQuizState: (quizState) => set({ quizState }),
 
-      addScore: (score) => {
-        const scores = [...get().scores, score].slice(-20);
-        set({ scores });
-        // Update heatmap
+      // Sync all study data to backend
+      syncStudyData: async () => {
+        const s = get();
+        if (!s.isAuthenticated || s.currentUser?.role !== 'student') return;
+        try {
+          await api.put('/study', {
+            subject: s.subject,
+            chapter: s.chapter,
+            level: s.level,
+            noteStyle: s.noteStyle,
+            examDate: s.examDate,
+            hoursPerDay: s.hoursPerDay,
+            subtopics: s.subtopics,
+            notes: s.notes,
+            flashcards: s.flashcards,
+            planner: s.planner,
+            quizQuestions: s.quizQuestions,
+            scores: s.scores,
+            cardsStudied: s.cardsStudied,
+            weakTopics: s.weakTopics,
+            studyHeatmap: s.studyHeatmap,
+            streak: s.streak,
+            pomoSessions: s.pomoSessions,
+            challengeHistory: s.challengeHistory,
+            studySessions: s.studySessions,
+          });
+        } catch (err) {
+          console.warn('Sync failed:', err.message);
+        }
+      },
+
+      // Load study data from backend
+      loadStudyData: async () => {
+        if (get().currentUser?.role !== 'student') return;
+        try {
+          const res = await api.get('/study');
+          const d = res.data;
+          set({
+            subject: d.subject || '',
+            chapter: d.chapter || '',
+            level: d.level || 'intermediate',
+            noteStyle: d.noteStyle || 'concise',
+            examDate: d.examDate || '',
+            hoursPerDay: d.hoursPerDay || 2,
+            subtopics: d.subtopics || [],
+            notes: d.notes || '',
+            flashcards: d.flashcards || [],
+            planner: d.planner || [],
+            quizQuestions: d.quizQuestions || [],
+            scores: d.scores || [],
+            cardsStudied: d.cardsStudied || 0,
+            weakTopics: d.weakTopics || {},
+            studyHeatmap: d.studyHeatmap || {},
+            streak: d.streak || 0,
+            pomoSessions: d.pomoSessions || 0,
+            challengeHistory: d.challengeHistory || [],
+            studySessions: d.studySessions || [],
+          });
+        } catch (err) {
+          console.warn('Load study data failed:', err.message);
+        }
+      },
+
+      addScore: async (score, weakTopicsUpdate) => {
+        const scores = [...get().scores, score].slice(-50);
         const today = new Date().toISOString().split('T')[0];
         const heatmap = { ...get().studyHeatmap };
         heatmap[today] = (heatmap[today] || 0) + 1;
-        set({ studyHeatmap: heatmap });
+        set({ scores, studyHeatmap: heatmap });
 
-        // Update leaderboard registry for current user
-        const user = get().currentUser;
-        if (user) {
-          const registry = { ...get().userRegistry };
-          const entry = registry[user.uniqueId] || { name: user.name, avatar: user.avatar, totalScore: 0, streak: 0, quizCount: 0 };
-          entry.totalScore += score;
-          entry.quizCount += 1;
-          entry.streak = get().streak;
-          entry.lastActive = new Date().toISOString();
-          registry[user.uniqueId] = entry;
-          set({ userRegistry: registry });
+        try {
+          await api.post('/study/score', { score, weakTopics: weakTopicsUpdate || {} });
+        } catch (err) {
+          console.warn('Score sync failed:', err.message);
         }
       },
 
@@ -168,144 +245,146 @@ const useAppStore = create(
         set({ bookmarked: bm });
       },
 
-      incrementCardsStudied: () => {
-        set((s) => ({ cardsStudied: s.cardsStudied + 1 }));
-        get().recordActivity();
-      },
+      incrementCardsStudied: () => set((s) => ({ cardsStudied: s.cardsStudied + 1 })),
 
       markDayDone: (idx) => {
         const planner = get().planner.map((d, i) =>
           i === idx ? { ...d, done: !d.done } : d
         );
         set({ planner });
-        get().recordActivity();
       },
 
       setPomodoro: (patch) => set((s) => ({ ...s, ...patch })),
       incrementPomoSessions: () => set((s) => ({ pomoSessions: s.pomoSessions + 1 })),
 
-      setRating: (key, val) => {
-        set((s) => ({ ratings: { ...s.ratings, [key]: val } }));
-        get().recordActivity();
-      },
-
-      recordActivity: () => {
-        const today = new Date().toISOString().split('T')[0];
-        const heatmap = { ...get().studyHeatmap };
-        heatmap[today] = (heatmap[today] || 0) + 1;
-        set({ studyHeatmap: heatmap });
-      },
+      setRating: (key, val) => set((s) => ({ ratings: { ...s.ratings, [key]: val } })),
 
       // ──────────────────────────────────────────────────────────────
-      // ── Teacher Actions
+      // ── TEACHER ACTIONS (API-backed) ──
       // ──────────────────────────────────────────────────────────────
 
-      addStudentByUniqueId: (uniqueId, name, subject = '') => {
-        const existing = get().students.find((s) => s.uniqueId === uniqueId);
-        if (existing) return { error: 'Student already linked' };
-        // Look up registry
-        const registryEntry = get().userRegistry[uniqueId];
-        const student = {
-          uniqueId,
-          name: name || registryEntry?.name || 'Unknown',
-          subject: subject || 'General',
-          score: registryEntry?.totalScore ? Math.round(registryEntry.totalScore / Math.max(registryEntry.quizCount, 1)) : 0,
-          streak: registryEntry?.streak || 0,
-          status: 'active',
-          lastSeen: registryEntry?.lastActive || new Date().toISOString().split('T')[0],
-          linkedAt: new Date().toISOString(),
-        };
-        set((s) => ({ students: [...s.students, student] }));
-        return { success: true, student };
+      fetchStudents: async () => {
+        try {
+          const res = await api.get('/teacher/students');
+          set({ students: res.data });
+        } catch (err) {
+          console.warn('Fetch students failed:', err.message);
+        }
       },
 
-      removeStudent: (uniqueId) =>
-        set((s) => ({ students: s.students.filter((st) => st.uniqueId !== uniqueId) })),
-
-      refreshStudentData: () => {
-        const registry = get().userRegistry;
-        const students = get().students.map((s) => {
-          const entry = registry[s.uniqueId];
-          if (!entry) return s;
-          return {
-            ...s,
-            name: entry.name || s.name,
-            score: entry.quizCount ? Math.round(entry.totalScore / entry.quizCount) : s.score,
-            streak: entry.streak || s.streak,
-            lastSeen: entry.lastActive?.split('T')[0] || s.lastSeen,
-          };
-        });
-        set({ students });
+      addStudentById: async (identifier) => {
+        try {
+          const res = await api.post('/user/add-student', { identifier });
+          // Refresh students list
+          await get().fetchStudents();
+          return { success: true, data: res.data };
+        } catch (err) {
+          return { error: err.message };
+        }
       },
 
-      addAssignment: (a) =>
-        set((s) => ({
-          assignments: [...s.assignments, {
-            ...a,
-            id: Date.now(),
-            assignedTo: a.assignedTo || [],
-            submissions: [],
-          }],
-        })),
-      removeAssignment: (id) =>
-        set((s) => ({ assignments: s.assignments.filter((a) => a.id !== id) })),
-
-      addCustomQuestion: (q) =>
-        set((s) => ({ customQuestions: [...s.customQuestions, { ...q, id: Date.now() }] })),
-      removeCustomQuestion: (id) =>
-        set((s) => ({ customQuestions: s.customQuestions.filter((q) => q.id !== id) })),
-
-      // ──────────────────────────────────────────────────────────────
-      // ── Parent Actions
-      // ──────────────────────────────────────────────────────────────
-
-      linkChild: (uniqueId, name) => {
-        const existing = get().linkedChildren.find((c) => c.uniqueId === uniqueId);
-        if (existing) return { error: 'Child already linked' };
-        const child = {
-          uniqueId,
-          name: name || get().userRegistry[uniqueId]?.name || 'Unknown',
-          linkedAt: new Date().toISOString(),
-        };
-        set((s) => ({ linkedChildren: [...s.linkedChildren, child] }));
-        return { success: true };
+      removeStudent: async (studentId) => {
+        try {
+          await api.delete(`/user/remove-student/${studentId}`);
+          set((s) => ({ students: s.students.filter((st) => st._id !== studentId) }));
+          return { success: true };
+        } catch (err) {
+          return { error: err.message };
+        }
       },
 
-      unlinkChild: (uniqueId) =>
-        set((s) => ({ linkedChildren: s.linkedChildren.filter((c) => c.uniqueId !== uniqueId) })),
+      fetchAssignments: async () => {
+        try {
+          const res = await api.get('/teacher/assignments');
+          set({ assignments: res.data });
+        } catch (err) {
+          console.warn('Fetch assignments failed:', err.message);
+        }
+      },
 
-      getChildData: (uniqueId) => {
-        const entry = get().userRegistry[uniqueId];
-        if (!entry) return null;
-        return {
-          ...entry,
-          uniqueId,
-          avgScore: entry.quizCount ? Math.round(entry.totalScore / entry.quizCount) : 0,
-        };
+      createAssignment: async (assignment) => {
+        try {
+          const res = await api.post('/teacher/assignments', assignment);
+          set((s) => ({ assignments: [res.data, ...s.assignments] }));
+          return { success: true };
+        } catch (err) {
+          return { error: err.message };
+        }
+      },
+
+      deleteAssignment: async (id) => {
+        try {
+          await api.delete(`/teacher/assignments/${id}`);
+          set((s) => ({ assignments: s.assignments.filter((a) => a._id !== id) }));
+          return { success: true };
+        } catch (err) {
+          return { error: err.message };
+        }
       },
 
       // ──────────────────────────────────────────────────────────────
-      // ── Buddy Actions
+      // ── PARENT ACTIONS (API-backed) ──
       // ──────────────────────────────────────────────────────────────
 
-      sendBuddyChallenge: (toId, subject) => {
-        const user = get().currentUser;
-        if (!user) return { error: 'Not logged in' };
-        const request = {
-          id: Date.now(),
-          fromId: user.uniqueId,
-          fromName: user.name,
-          toId,
-          subject,
-          status: 'pending',
-          createdAt: new Date().toISOString(),
-        };
-        set((s) => ({ buddyRequests: [...s.buddyRequests, request] }));
-        return { success: true, request };
+      fetchChildProgress: async () => {
+        try {
+          const res = await api.get('/parent/child-progress');
+          set({ childrenData: res.data });
+        } catch (err) {
+          console.warn('Fetch children failed:', err.message);
+        }
+      },
+
+      linkChild: async (identifier) => {
+        try {
+          const res = await api.post('/user/link-child', { identifier });
+          await get().loadUser();
+          await get().fetchChildProgress();
+          return { success: true, data: res.data };
+        } catch (err) {
+          return { error: err.message };
+        }
+      },
+
+      unlinkChild: async (childId) => {
+        try {
+          await api.delete(`/user/unlink-child/${childId}`);
+          set((s) => ({ childrenData: s.childrenData.filter((c) => c._id !== childId) }));
+          await get().loadUser();
+          return { success: true };
+        } catch (err) {
+          return { error: err.message };
+        }
+      },
+
+      // ──────────────────────────────────────────────────────────────
+      // ── BUDDY ACTIONS ──
+      // ──────────────────────────────────────────────────────────────
+
+      addBuddy: async (identifier) => {
+        try {
+          const res = await api.post('/user/add-buddy', { identifier });
+          await get().loadUser();
+          return { success: true, data: res.data };
+        } catch (err) {
+          return { error: err.message };
+        }
+      },
+
+      removeBuddy: async (buddyId) => {
+        try {
+          await api.delete(`/user/remove-buddy/${buddyId}`);
+          await get().loadUser();
+          return { success: true };
+        } catch (err) {
+          return { error: err.message };
+        }
       },
 
       addChallengeResult: (result) =>
-        set((s) => ({ challengeHistory: [...s.challengeHistory, { ...result, id: Date.now(), date: new Date().toISOString() }] })),
+        set((s) => ({
+          challengeHistory: [...s.challengeHistory, { ...result, id: Date.now(), date: new Date().toISOString() }],
+        })),
 
       addStudySession: (session) =>
         set((s) => ({ studySessions: [...s.studySessions, { ...session, id: Date.now() }] })),
@@ -313,7 +392,20 @@ const useAppStore = create(
         set((s) => ({ studySessions: s.studySessions.filter((ss) => ss.id !== id) })),
 
       // ──────────────────────────────────────────────────────────────
-      // ── Reminders
+      // ── LEADERBOARD ──
+      // ──────────────────────────────────────────────────────────────
+
+      fetchLeaderboard: async () => {
+        try {
+          const res = await api.get('/study/leaderboard');
+          set({ leaderboard: res.data });
+        } catch (err) {
+          console.warn('Fetch leaderboard failed:', err.message);
+        }
+      },
+
+      // ──────────────────────────────────────────────────────────────
+      // ── REMINDERS (local) ──
       // ──────────────────────────────────────────────────────────────
 
       addReminder: (reminder) =>
@@ -322,61 +414,34 @@ const useAppStore = create(
         set((s) => ({ reminders: s.reminders.filter((r) => r.id !== id) })),
 
       // ──────────────────────────────────────────────────────────────
-      // ── Leaderboard (computed from userRegistry)
+      // ── CLEAR ──
       // ──────────────────────────────────────────────────────────────
 
-      getLeaderboard: () => {
-        const registry = get().userRegistry;
-        const currentId = get().currentUser?.uniqueId;
-        return Object.entries(registry)
-          .map(([id, data]) => ({
-            uniqueId: id,
-            name: id === currentId ? 'You' : data.name,
-            avatar: data.avatar || data.name?.slice(0, 2).toUpperCase() || '??',
-            score: data.totalScore || 0,
-            avgScore: data.quizCount ? Math.round(data.totalScore / data.quizCount) : 0,
-            streak: data.streak || 0,
-            quizCount: data.quizCount || 0,
-            isYou: id === currentId,
-          }))
-          .filter((e) => e.quizCount > 0)
-          .sort((a, b) => b.score - a.score);
-      },
-
-      // Register or update an external user (e.g. from buddy code entry)
-      registerUser: (uniqueId, name) => {
-        const registry = { ...get().userRegistry };
-        if (!registry[uniqueId]) {
-          registry[uniqueId] = {
-            name: name || 'Unknown',
-            avatar: (name || 'UN').slice(0, 2).toUpperCase(),
-            totalScore: 0,
-            streak: 0,
-            quizCount: 0,
-            lastActive: new Date().toISOString(),
-          };
-          set({ userRegistry: registry });
-        }
-      },
-
-      // ──────────────────────────────────────────────────────────────
-      // ── Clear
-      // ──────────────────────────────────────────────────────────────
-
-      clearAllData: () => set({
-        notes: '', flashcards: [], planner: [], quizQuestions: [], quizState: null,
-        scores: [], cardsStudied: 0, bookmarked: [], weakTopics: {}, studyHeatmap: {},
-        streak: 0, ratings: {}, customQuestions: [], reminders: [],
-        students: [], assignments: [], linkedChildren: [],
-        buddyRequests: [], challengeHistory: [], studySessions: [], sharedNotes: [],
-      }),
+      clearAllData: () =>
+        set({
+          notes: '',
+          flashcards: [],
+          planner: [],
+          quizQuestions: [],
+          quizState: null,
+          scores: [],
+          cardsStudied: 0,
+          bookmarked: [],
+          weakTopics: {},
+          studyHeatmap: {},
+          streak: 0,
+          ratings: {},
+          reminders: [],
+          challengeHistory: [],
+          studySessions: [],
+        }),
     }),
     {
-      name: 'smart-study-storage',
+      name: 'minxy-storage',
       partialize: (state) => ({
-        role: state.role,
-        apiKey: state.apiKey,
+        token: state.token,
         currentUser: state.currentUser,
+        isAuthenticated: state.isAuthenticated,
         subject: state.subject,
         chapter: state.chapter,
         examDate: state.examDate,
@@ -395,15 +460,9 @@ const useAppStore = create(
         studyHeatmap: state.studyHeatmap,
         streak: state.streak,
         ratings: state.ratings,
-        customQuestions: state.customQuestions,
         reminders: state.reminders,
-        assignments: state.assignments,
-        students: state.students,
-        linkedChildren: state.linkedChildren,
-        buddyRequests: state.buddyRequests,
         challengeHistory: state.challengeHistory,
         studySessions: state.studySessions,
-        userRegistry: state.userRegistry,
       }),
     }
   )
