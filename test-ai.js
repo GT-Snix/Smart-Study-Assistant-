@@ -1,5 +1,6 @@
-const key = process.env.OPENROUTER_API_KEY || process.env.VITE_OPENROUTER_API_KEY;
-if (!key) throw new Error("Missing OPENROUTER_API_KEY or VITE_OPENROUTER_API_KEY in environment");
+import fs from 'fs';
+
+const key = 'REDACTED';
 
 const callAI = async (prompt, model) => {
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
