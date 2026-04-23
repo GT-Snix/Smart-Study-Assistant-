@@ -1,14 +1,15 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Settings, ChevronRight } from 'lucide-react';
+import { Settings, ChevronRight, Copy } from 'lucide-react';
 import { NAV, ROLE_CONFIG } from '../../constants/nav';
 import useAppStore from '../../store/useAppStore';
+import toast from 'react-hot-toast';
 
 const ROLES = ['student', 'teacher', 'buddy', 'parent'];
 
 const Sidebar = ({ onSettings }) => {
-  const { role, setRole } = useAppStore();
+  const { role, setRole, currentUser } = useAppStore();
   const navigate = useNavigate();
   const nav = NAV[role] || [];
   const rc = ROLE_CONFIG[role];
@@ -16,6 +17,13 @@ const Sidebar = ({ onSettings }) => {
   const handleRoleChange = (newRole) => {
     setRole(newRole);
     navigate(NAV[newRole][0].path);
+  };
+
+  const copyId = () => {
+    if (currentUser?.uniqueId) {
+      navigator.clipboard.writeText(currentUser.uniqueId);
+      toast.success('ID copied!');
+    }
   };
 
   return (
@@ -32,6 +40,23 @@ const Sidebar = ({ onSettings }) => {
           </div>
         </div>
       </div>
+
+      {/* User card */}
+      {currentUser && (
+        <div className="px-4 py-3 border-b border-border">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-accent/10 ring-1 ring-accent/30 flex items-center justify-center text-xs font-bold text-accent">
+              {currentUser.avatar}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-white truncate">{currentUser.name}</p>
+              <button onClick={copyId} className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-accent transition-colors font-mono">
+                {currentUser.uniqueId} <Copy size={8} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Role switcher */}
       <div className="px-4 py-4 border-b border-border">

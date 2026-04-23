@@ -1,30 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-
-const MOCK_STUDENTS = [
-  { id: 1, name: 'Alice Johnson',   subject: 'Mathematics', score: 88, streak: 7,  status: 'active',   lastSeen: '2025-04-15' },
-  { id: 2, name: 'Bob Smith',       subject: 'Physics',     score: 64, streak: 3,  status: 'at-risk',  lastSeen: '2025-04-14' },
-  { id: 3, name: 'Clara Davis',     subject: 'Chemistry',   score: 91, streak: 14, status: 'active',   lastSeen: '2025-04-15' },
-  { id: 4, name: 'David Lee',       subject: 'Biology',     score: 55, streak: 1,  status: 'at-risk',  lastSeen: '2025-04-12' },
-  { id: 5, name: 'Emma Wilson',     subject: 'History',     score: 78, streak: 5,  status: 'active',   lastSeen: '2025-04-15' },
-  { id: 6, name: 'Frank Miller',    subject: 'English',     score: 82, streak: 9,  status: 'active',   lastSeen: '2025-04-15' },
-];
-
-const MOCK_ASSIGNMENTS = [
-  { id: 1, title: 'Chapter 5 Quiz',       subject: 'Mathematics', dueDate: '2025-04-20', status: 'active',    submissions: 18, total: 24 },
-  { id: 2, title: 'Lab Report Writing',   subject: 'Chemistry',   dueDate: '2025-04-18', status: 'active',    submissions: 12, total: 20 },
-  { id: 3, title: 'Essay — WWI Causes',   subject: 'History',     dueDate: '2025-04-16', status: 'overdue',   submissions: 8,  total: 22 },
-  { id: 4, title: 'Genetics Flashcards',  subject: 'Biology',     dueDate: '2025-04-25', status: 'upcoming',  submissions: 0,  total: 18 },
-];
-
-const MOCK_LEADERBOARD = [
-  { id: 1, name: 'Clara Davis',  avatar: 'CD', score: 2840, streak: 14, badges: ['🏆', '⚡', '🔥'] },
-  { id: 2, name: 'Alice Johnson',avatar: 'AJ', score: 2610, streak: 7,  badges: ['⭐', '🔥'] },
-  { id: 3, name: 'Frank Miller', avatar: 'FM', score: 2480, streak: 9,  badges: ['⭐'] },
-  { id: 4, name: 'Emma Wilson',  avatar: 'EW', score: 2100, streak: 5,  badges: [] },
-  { id: 5, name: 'Bob Smith',    avatar: 'BS', score: 1870, streak: 3,  badges: [] },
-  { id: 6, name: 'You',          avatar: 'ME', score: 1650, streak: 2,  badges: [] },
-];
+import { generateUniqueId } from '../utils/uniqueId';
 
 const useAppStore = create(
   persist(
@@ -32,6 +8,9 @@ const useAppStore = create(
       // ── Auth & Role
       role: 'student',
       apiKey: '',
+
+      // ── Current User Profile (created on first load)
+      currentUser: null, // { uniqueId, name, role, avatar, createdAt }
 
       // ── Study Setup
       subject: '',
@@ -66,16 +45,72 @@ const useAppStore = create(
       pomodoroMode: 'study',
       pomoSessions: 0,
 
-      // ── Teacher / Admin Data
-      students: MOCK_STUDENTS,
-      assignments: MOCK_ASSIGNMENTS,
+      // ── Teacher Data (real students, no mocks)
+      students: [],       // [{ uniqueId, name, subject, score, streak, status, lastSeen, linkedAt }]
+      assignments: [],     // [{ id, title, subject, dueDate, status, assignedTo: [uniqueId], submissions: [] }]
       customQuestions: [],
-      reminders: [],
-      leaderboard: MOCK_LEADERBOARD,
+      sharedNotes: [],
 
-      // ── Actions
+      // ── Parent Data (linked children)
+      linkedChildren: [], // [{ uniqueId, name, linkedAt }]
+
+      // ── Buddy Data
+      buddyRequests: [],   // [{ id, fromId, fromName, subject, status, createdAt }]
+      challengeHistory: [], // [{ id, opponentId, opponentName, subject, myScore, theirScore, date }]
+      studySessions: [],   // [{ id, buddyId, buddyName, subject, date, time, type }]
+
+      // ── Reminders (parent)
+      reminders: [],
+
+      // ── Leaderboard (computed from real users — stored registry)
+      userRegistry: {},   // { [uniqueId]: { name, avatar, totalScore, streak, quizCount, lastActive } }
+
+      // ──────────────────────────────────────────────────────────────
+      // ── Auth & User Actions
+      // ──────────────────────────────────────────────────────────────
+
+      initUser: (name) => {
+        const existing = get().currentUser;
+        if (existing) return existing;
+        const user = {
+          uniqueId: generateUniqueId(),
+          name: name || 'Student',
+          role: get().role,
+          avatar: (name || 'ST').slice(0, 2).toUpperCase(),
+          createdAt: new Date().toISOString(),
+        };
+        // Also register self in leaderboard registry
+        const registry = { ...get().userRegistry };
+        registry[user.uniqueId] = {
+          name: user.name,
+          avatar: user.avatar,
+          totalScore: 0,
+          streak: 0,
+          quizCount: 0,
+          lastActive: new Date().toISOString(),
+        };
+        set({ currentUser: user, userRegistry: registry });
+        return user;
+      },
+
+      updateUserName: (name) => {
+        const user = get().currentUser;
+        if (!user) return;
+        const avatar = name.slice(0, 2).toUpperCase();
+        const updated = { ...user, name, avatar };
+        const registry = { ...get().userRegistry };
+        if (registry[user.uniqueId]) {
+          registry[user.uniqueId] = { ...registry[user.uniqueId], name, avatar };
+        }
+        set({ currentUser: updated, userRegistry: registry });
+      },
+
       setRole: (role) => set({ role }),
       setApiKey: (apiKey) => set({ apiKey }),
+
+      // ──────────────────────────────────────────────────────────────
+      // ── Study Setup
+      // ──────────────────────────────────────────────────────────────
 
       setSubject: (subject) => set({ subject }),
       setChapter: (chapter) => set({ chapter }),
@@ -85,20 +120,38 @@ const useAppStore = create(
       setSubtopics: (subtopics) => set({ subtopics }),
       setNoteStyle: (noteStyle) => set({ noteStyle }),
 
+      // ──────────────────────────────────────────────────────────────
+      // ── Generated Content
+      // ──────────────────────────────────────────────────────────────
+
       setNotes: (notes) => set({ notes }),
       setFlashcards: (flashcards) => set({ flashcards }),
       setPlanner: (planner) => set({ planner }),
 
       setQuizQuestions: (quizQuestions) => set({ quizQuestions }),
       setQuizState: (quizState) => set({ quizState }),
+
       addScore: (score) => {
         const scores = [...get().scores, score].slice(-20);
         set({ scores });
-        // update heatmap
+        // Update heatmap
         const today = new Date().toISOString().split('T')[0];
         const heatmap = { ...get().studyHeatmap };
         heatmap[today] = (heatmap[today] || 0) + 1;
         set({ studyHeatmap: heatmap });
+
+        // Update leaderboard registry for current user
+        const user = get().currentUser;
+        if (user) {
+          const registry = { ...get().userRegistry };
+          const entry = registry[user.uniqueId] || { name: user.name, avatar: user.avatar, totalScore: 0, streak: 0, quizCount: 0 };
+          entry.totalScore += score;
+          entry.quizCount += 1;
+          entry.streak = get().streak;
+          entry.lastActive = new Date().toISOString();
+          registry[user.uniqueId] = entry;
+          set({ userRegistry: registry });
+        }
       },
 
       addWeakTopic: (topic) => {
@@ -143,25 +196,179 @@ const useAppStore = create(
         set({ studyHeatmap: heatmap });
       },
 
-      addReminder: (reminder) =>
-        set((s) => ({ reminders: [...s.reminders, { ...reminder, id: Date.now() }] })),
-      removeReminder: (id) =>
-        set((s) => ({ reminders: s.reminders.filter((r) => r.id !== id) })),
+      // ──────────────────────────────────────────────────────────────
+      // ── Teacher Actions
+      // ──────────────────────────────────────────────────────────────
+
+      addStudentByUniqueId: (uniqueId, name, subject = '') => {
+        const existing = get().students.find((s) => s.uniqueId === uniqueId);
+        if (existing) return { error: 'Student already linked' };
+        // Look up registry
+        const registryEntry = get().userRegistry[uniqueId];
+        const student = {
+          uniqueId,
+          name: name || registryEntry?.name || 'Unknown',
+          subject: subject || 'General',
+          score: registryEntry?.totalScore ? Math.round(registryEntry.totalScore / Math.max(registryEntry.quizCount, 1)) : 0,
+          streak: registryEntry?.streak || 0,
+          status: 'active',
+          lastSeen: registryEntry?.lastActive || new Date().toISOString().split('T')[0],
+          linkedAt: new Date().toISOString(),
+        };
+        set((s) => ({ students: [...s.students, student] }));
+        return { success: true, student };
+      },
+
+      removeStudent: (uniqueId) =>
+        set((s) => ({ students: s.students.filter((st) => st.uniqueId !== uniqueId) })),
+
+      refreshStudentData: () => {
+        const registry = get().userRegistry;
+        const students = get().students.map((s) => {
+          const entry = registry[s.uniqueId];
+          if (!entry) return s;
+          return {
+            ...s,
+            name: entry.name || s.name,
+            score: entry.quizCount ? Math.round(entry.totalScore / entry.quizCount) : s.score,
+            streak: entry.streak || s.streak,
+            lastSeen: entry.lastActive?.split('T')[0] || s.lastSeen,
+          };
+        });
+        set({ students });
+      },
+
+      addAssignment: (a) =>
+        set((s) => ({
+          assignments: [...s.assignments, {
+            ...a,
+            id: Date.now(),
+            assignedTo: a.assignedTo || [],
+            submissions: [],
+          }],
+        })),
+      removeAssignment: (id) =>
+        set((s) => ({ assignments: s.assignments.filter((a) => a.id !== id) })),
 
       addCustomQuestion: (q) =>
         set((s) => ({ customQuestions: [...s.customQuestions, { ...q, id: Date.now() }] })),
       removeCustomQuestion: (id) =>
         set((s) => ({ customQuestions: s.customQuestions.filter((q) => q.id !== id) })),
 
-      addAssignment: (a) =>
-        set((s) => ({ assignments: [...s.assignments, { ...a, id: Date.now() }] })),
-      removeAssignment: (id) =>
-        set((s) => ({ assignments: s.assignments.filter((a) => a.id !== id) })),
+      // ──────────────────────────────────────────────────────────────
+      // ── Parent Actions
+      // ──────────────────────────────────────────────────────────────
+
+      linkChild: (uniqueId, name) => {
+        const existing = get().linkedChildren.find((c) => c.uniqueId === uniqueId);
+        if (existing) return { error: 'Child already linked' };
+        const child = {
+          uniqueId,
+          name: name || get().userRegistry[uniqueId]?.name || 'Unknown',
+          linkedAt: new Date().toISOString(),
+        };
+        set((s) => ({ linkedChildren: [...s.linkedChildren, child] }));
+        return { success: true };
+      },
+
+      unlinkChild: (uniqueId) =>
+        set((s) => ({ linkedChildren: s.linkedChildren.filter((c) => c.uniqueId !== uniqueId) })),
+
+      getChildData: (uniqueId) => {
+        const entry = get().userRegistry[uniqueId];
+        if (!entry) return null;
+        return {
+          ...entry,
+          uniqueId,
+          avgScore: entry.quizCount ? Math.round(entry.totalScore / entry.quizCount) : 0,
+        };
+      },
+
+      // ──────────────────────────────────────────────────────────────
+      // ── Buddy Actions
+      // ──────────────────────────────────────────────────────────────
+
+      sendBuddyChallenge: (toId, subject) => {
+        const user = get().currentUser;
+        if (!user) return { error: 'Not logged in' };
+        const request = {
+          id: Date.now(),
+          fromId: user.uniqueId,
+          fromName: user.name,
+          toId,
+          subject,
+          status: 'pending',
+          createdAt: new Date().toISOString(),
+        };
+        set((s) => ({ buddyRequests: [...s.buddyRequests, request] }));
+        return { success: true, request };
+      },
+
+      addChallengeResult: (result) =>
+        set((s) => ({ challengeHistory: [...s.challengeHistory, { ...result, id: Date.now(), date: new Date().toISOString() }] })),
+
+      addStudySession: (session) =>
+        set((s) => ({ studySessions: [...s.studySessions, { ...session, id: Date.now() }] })),
+      removeStudySession: (id) =>
+        set((s) => ({ studySessions: s.studySessions.filter((ss) => ss.id !== id) })),
+
+      // ──────────────────────────────────────────────────────────────
+      // ── Reminders
+      // ──────────────────────────────────────────────────────────────
+
+      addReminder: (reminder) =>
+        set((s) => ({ reminders: [...s.reminders, { ...reminder, id: Date.now() }] })),
+      removeReminder: (id) =>
+        set((s) => ({ reminders: s.reminders.filter((r) => r.id !== id) })),
+
+      // ──────────────────────────────────────────────────────────────
+      // ── Leaderboard (computed from userRegistry)
+      // ──────────────────────────────────────────────────────────────
+
+      getLeaderboard: () => {
+        const registry = get().userRegistry;
+        const currentId = get().currentUser?.uniqueId;
+        return Object.entries(registry)
+          .map(([id, data]) => ({
+            uniqueId: id,
+            name: id === currentId ? 'You' : data.name,
+            avatar: data.avatar || data.name?.slice(0, 2).toUpperCase() || '??',
+            score: data.totalScore || 0,
+            avgScore: data.quizCount ? Math.round(data.totalScore / data.quizCount) : 0,
+            streak: data.streak || 0,
+            quizCount: data.quizCount || 0,
+            isYou: id === currentId,
+          }))
+          .filter((e) => e.quizCount > 0)
+          .sort((a, b) => b.score - a.score);
+      },
+
+      // Register or update an external user (e.g. from buddy code entry)
+      registerUser: (uniqueId, name) => {
+        const registry = { ...get().userRegistry };
+        if (!registry[uniqueId]) {
+          registry[uniqueId] = {
+            name: name || 'Unknown',
+            avatar: (name || 'UN').slice(0, 2).toUpperCase(),
+            totalScore: 0,
+            streak: 0,
+            quizCount: 0,
+            lastActive: new Date().toISOString(),
+          };
+          set({ userRegistry: registry });
+        }
+      },
+
+      // ──────────────────────────────────────────────────────────────
+      // ── Clear
+      // ──────────────────────────────────────────────────────────────
 
       clearAllData: () => set({
         notes: '', flashcards: [], planner: [], quizQuestions: [], quizState: null,
         scores: [], cardsStudied: 0, bookmarked: [], weakTopics: {}, studyHeatmap: {},
         streak: 0, ratings: {}, customQuestions: [], reminders: [],
+        students: [], assignments: [], linkedChildren: [],
+        buddyRequests: [], challengeHistory: [], studySessions: [], sharedNotes: [],
       }),
     }),
     {
@@ -169,6 +376,7 @@ const useAppStore = create(
       partialize: (state) => ({
         role: state.role,
         apiKey: state.apiKey,
+        currentUser: state.currentUser,
         subject: state.subject,
         chapter: state.chapter,
         examDate: state.examDate,
@@ -190,6 +398,12 @@ const useAppStore = create(
         customQuestions: state.customQuestions,
         reminders: state.reminders,
         assignments: state.assignments,
+        students: state.students,
+        linkedChildren: state.linkedChildren,
+        buddyRequests: state.buddyRequests,
+        challengeHistory: state.challengeHistory,
+        studySessions: state.studySessions,
+        userRegistry: state.userRegistry,
       }),
     }
   )

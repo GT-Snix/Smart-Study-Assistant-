@@ -10,13 +10,14 @@ const CHANNELS = ['Email', 'SMS', 'Push', 'WhatsApp'];
 const pageVariants = { initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0 } };
 
 const Reminders = () => {
-  const { reminders, addReminder, removeReminder } = useAppStore();
-  const [form, setForm] = useState({ title: '', date: '', time: '', channel: 'Email', student: '' });
+  const { reminders, addReminder, removeReminder, linkedChildren } = useAppStore();
+  const [form, setForm] = useState({ title: '', date: '', time: '', channel: 'Email', childId: '' });
 
   const handleAdd = () => {
     if (!form.title || !form.date) { toast.error('Title and date are required.'); return; }
-    addReminder({ ...form });
-    setForm({ title: '', date: '', time: '', channel: 'Email', student: '' });
+    const child = linkedChildren.find((c) => c.uniqueId === form.childId);
+    addReminder({ ...form, student: child?.name || form.childId || '' });
+    setForm({ title: '', date: '', time: '', channel: 'Email', childId: '' });
     toast.success('Reminder set!');
   };
 
@@ -30,18 +31,30 @@ const Reminders = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Form */}
         <div className="card space-y-4">
-          <h2 className="text-sm font-semibold text-white uppercase tracking-wide flex items-center gap-2"><Plus size={14}/> New Reminder</h2>
-          <div><label className="label">Title</label><input className="input" value={form.title} onChange={(e)=>setForm({...form,title:e.target.value})} placeholder="e.g. Math exam tomorrow!" /></div>
-          <div><label className="label">Student</label><input className="input" value={form.student} onChange={(e)=>setForm({...form,student:e.target.value})} placeholder="Child's name" /></div>
+          <h2 className="text-sm font-semibold text-white uppercase tracking-wide flex items-center gap-2"><Plus size={14} /> New Reminder</h2>
+          <div><label className="label">Title</label><input className="input" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g. Math exam tomorrow!" /></div>
+          <div>
+            <label className="label">Child</label>
+            {linkedChildren.length > 0 ? (
+              <select className="input" value={form.childId} onChange={(e) => setForm({ ...form, childId: e.target.value })}>
+                <option value="">All children</option>
+                {linkedChildren.map((c) => (
+                  <option key={c.uniqueId} value={c.uniqueId}>{c.name} ({c.uniqueId})</option>
+                ))}
+              </select>
+            ) : (
+              <p className="text-xs text-gray-500 p-2">Link a child first from the Overview tab.</p>
+            )}
+          </div>
           <div className="grid grid-cols-2 gap-3">
-            <div><label className="label">Date</label><input type="date" className="input" value={form.date} onChange={(e)=>setForm({...form,date:e.target.value})} /></div>
-            <div><label className="label">Time</label><input type="time" className="input" value={form.time} onChange={(e)=>setForm({...form,time:e.target.value})} /></div>
+            <div><label className="label">Date</label><input type="date" className="input" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></div>
+            <div><label className="label">Time</label><input type="time" className="input" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} /></div>
           </div>
           <div>
             <label className="label">Channel</label>
             <div className="flex flex-wrap gap-2">
-              {CHANNELS.map((c)=>(
-                <button key={c} onClick={()=>setForm({...form,channel:c})} className={`px-3 py-1.5 rounded-lg border text-xs transition-all ${form.channel===c?'bg-blue/10 border-blue text-blue':'border-border text-gray-400'}`}>{c}</button>
+              {CHANNELS.map((c) => (
+                <button key={c} onClick={() => setForm({ ...form, channel: c })} className={`px-3 py-1.5 rounded-lg border text-xs transition-all ${form.channel === c ? 'bg-blue/10 border-blue text-blue' : 'border-border text-gray-400'}`}>{c}</button>
               ))}
             </div>
           </div>

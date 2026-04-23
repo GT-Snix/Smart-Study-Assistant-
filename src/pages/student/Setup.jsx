@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Sparkles, ChevronRight, BookOpen, Calendar, Clock, Layers } from 'lucide-react';
+import { Sparkles, ChevronRight, BookOpen, Calendar, Clock, Layers, Copy, UserCircle2 } from 'lucide-react';
 import useAppStore from '../../store/useAppStore';
 import useAI from '../../hooks/useAI';
 import { parseJSON } from '../../utils/parseAI';
@@ -28,6 +28,29 @@ const Setup = () => {
   const { generate, loading } = useAI();
   const navigate = useNavigate();
   const [localSubtopics, setLocalSubtopics] = useState(store.subtopics.join(', '));
+  const [userName, setUserName] = useState('');
+  const [showProfile, setShowProfile] = useState(false);
+
+  // Auto-init user on mount if not already created
+  useEffect(() => {
+    if (!store.currentUser) {
+      setShowProfile(true);
+    }
+  }, [store.currentUser]);
+
+  const handleCreateProfile = () => {
+    if (!userName.trim()) { toast.error('Please enter your name.'); return; }
+    const user = store.initUser(userName.trim());
+    toast.success(`Welcome, ${user.name}! Your ID is ${user.uniqueId}`);
+    setShowProfile(false);
+  };
+
+  const copyUniqueId = () => {
+    if (store.currentUser?.uniqueId) {
+      navigator.clipboard.writeText(store.currentUser.uniqueId);
+      toast.success('Unique ID copied!');
+    }
+  };
 
   const handleGenerate = async () => {
     if (!store.subject || !store.chapter) {
@@ -76,12 +99,62 @@ const Setup = () => {
     }
   };
 
+  // ── Profile creation overlay ──
+  if (showProfile && !store.currentUser) {
+    return (
+      <motion.div variants={pageVariants} initial="initial" animate="animate" className="space-y-6 max-w-md mx-auto">
+        <div className="text-center">
+          <UserCircle2 size={56} className="mx-auto text-accent mb-4" />
+          <h1 className="text-3xl font-bold font-display text-white">Welcome!</h1>
+          <p className="text-gray-400 mt-2 text-sm">Create your profile to get started. You'll receive a unique 6-character ID to share with teachers, parents, and buddies.</p>
+        </div>
+        <div className="card space-y-4">
+          <div>
+            <label className="label">Your Name *</label>
+            <input
+              className="input"
+              placeholder="e.g. John Doe"
+              value={userName}
+              onChange={(e) => setUserName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleCreateProfile()}
+            />
+          </div>
+          <Button fullWidth onClick={handleCreateProfile} icon={Sparkles}>Create My Profile</Button>
+        </div>
+      </motion.div>
+    );
+  }
+
   return (
     <motion.div variants={pageVariants} initial="initial" animate="animate" className="space-y-8">
       <div>
         <h1 className="text-3xl font-bold font-display text-white">Study Setup</h1>
         <p className="text-gray-400 mt-1 text-sm">Configure your study session and let AI generate everything</p>
       </div>
+
+      {/* User ID card */}
+      {store.currentUser && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
+          className="card flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-accent/20"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-accent/10 ring-1 ring-accent/30 flex items-center justify-center text-sm font-bold text-accent">
+              {store.currentUser.avatar}
+            </div>
+            <div>
+              <p className="text-white font-semibold text-sm">{store.currentUser.name}</p>
+              <p className="text-gray-500 text-[10px] font-mono">ID: {store.currentUser.uniqueId}</p>
+            </div>
+          </div>
+          <button
+            onClick={copyUniqueId}
+            className="flex items-center gap-2 px-3 py-2 bg-accent/10 hover:bg-accent/20 text-accent text-xs font-medium rounded-xl border border-accent/20 transition-all"
+          >
+            <Copy size={12} /> Copy ID
+          </button>
+        </motion.div>
+      )}
 
       {/* Current summary */}
       {store.subject && (
