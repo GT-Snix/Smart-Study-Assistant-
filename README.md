@@ -1,75 +1,153 @@
-# 🧠 Smart Study Assistant+
+🧠 MINXY — Smart Study Assistant+
 
-AI-powered study platform with 4 role-based dashboards, built with **Vite + React 18**.
+A multi-actor, AI-driven learning system that models real-world educational workflows across students, teachers, parents, and peers.
 
-## Features
+Engineered as a modular, role-based SPA with dynamic AI content generation and state persistence.
 
-| Role | Pages |
-|---|---|
-| 🎓 Student | Setup → Notes → Flashcards → Planner → Quiz → Pomodoro → Progress |
-| 📚 Teacher | Dashboard → Assignments → Question Bank → Student Reports → Class Notes |
-| 🤝 Buddy   | Shared Flashcards → Quiz Challenge → Leaderboard → Study Schedule |
-| 👤 Parent  | Overview → Reports → Schedule → Reminders |
+🔍 Problem Statement
 
-**AI Features** (via OpenRouter):
-- Structured markdown study notes (style & level aware)
-- 12 flip-card flashcards with hints & difficulty
-- Personalized N-day study planner with type-coded days
-- 10-question multiple-choice quiz + speed round mode
-- Post-quiz AI feedback paragraph
+Most ed-tech tools optimize for a single user (typically the student), ignoring the interconnected nature of learning ecosystems.
 
-## Setup
+MINXY addresses this by:
 
-### 1. Install dependencies
-```bash
+Modeling multiple stakeholders
+Enabling shared state across roles
+Integrating AI as a first-class system component, not a feature
+🧠 System Overview
+
+MINXY is a role-segmented frontend architecture where each role operates within an isolated UI boundary but shares a unified data layer.
+
+Key Properties
+Role-based routing
+Persistent client-side state
+On-demand AI content pipeline
+Modular feature isolation
+🧩 Role-Based Architecture
+🎓 Student Interface
+AI-generated notes (structured markdown)
+Flashcards (difficulty + hint metadata)
+Adaptive study planner (N-day scheduling)
+Quiz engine (MCQ + speed mode)
+Pomodoro-based focus system
+Progress tracking (charts + weak areas)
+📚 Teacher Interface
+Assignment lifecycle management
+Question bank system
+Student analytics dashboard
+Class-level content distribution
+🤝 Buddy System
+Shared flashcards
+Competitive quiz challenges
+Leaderboard system
+Collaborative scheduling
+👤 Parent Dashboard
+Performance summaries
+Behavioral insights
+Schedule tracking
+Reminder system
+🤖 AI Integration Layer
+
+Powered via OpenRouter
+
+Pipeline Design
+Stateless request model
+Prompt templates per feature
+Structured output enforcement
+Capabilities
+Context-aware study notes
+12-card flashcard generation (difficulty-tagged)
+Personalized study plans (time-distributed)
+Quiz generation (10 MCQs + speed round)
+Post-quiz evaluation (natural language feedback)
+🏗️ Architecture
+Frontend Stack
+Layer	Technology
+Framework	React 18
+Build Tool	Vite 5
+Routing	React Router v6
+State	Zustand
+Styling	Tailwind CSS 3
+Animation	Framer Motion 11
+Charts	Recharts 2
+Architectural Decisions
+1. Zustand over Redux
+Lower boilerplate
+Faster iteration
+Sufficient for current scale
+2. Client-Side Persistence
+localStorage-backed store
+Eliminates backend dependency for MVP
+Trade-off: no cross-device sync
+3. Role-Based Routing
+Clean separation of UI domains
+Enables independent scaling per role
+4. AI as a Service Layer
+Abstracted prompt system
+Reusable generation logic
+Easy provider swap (OpenRouter → others)
+🔄 Data Flow
+User action triggers feature (e.g., generate quiz)
+Prompt template constructed
+API request sent to OpenRouter
+Structured response parsed
+State updated via Zustand
+UI re-renders with persisted data
+⚙️ Setup
+Install
 npm install
-```
-
-### 2. Configure API key
-```bash
+Configure
 cp .env.example .env
-```
-Open `.env` and paste your OpenRouter API key:
-```
 VITE_OPENROUTER_API_KEY=sk-or-v1-...
-```
-> Get your key at [openrouter.ai/keys](https://openrouter.ai/keys)
-
-### 3. Run dev server
-```bash
+Run
 npm run dev
-```
-App opens at **http://localhost:3000**
+http://localhost:3000
+Runtime Injection
 
-> **Tip:** You can also paste your API key at runtime via the **⚙️ Settings** button — no restart needed.
+API key can be set via in-app settings panel (no restart required).
 
-## Tech Stack
+📦 Scripts
+npm run dev
+npm run build
+npm run preview
+🎨 Design System
+Token	Value	Purpose
+bg	#0e0f14	Base
+surface	#16181f	Containers
+accent	#f5c842	Primary
+purple	#8b7cf8	Teacher
+teal	#3dcfb4	Buddy
+blue	#5baef5	Parent
+⚠️ Constraints & Trade-offs
+No backend → limited persistence scope
+AI latency dependent on external provider
+No authentication layer (single-user assumption)
+Large AI responses may affect performance
+📈 Scalability Considerations
 
-- **React 18 + Vite 5** — lightning-fast dev server
-- **React Router v6** — role-based SPA routing
-- **Zustand** — global state with localStorage persistence
-- **Tailwind CSS 3** — custom dark/gold design system
-- **Framer Motion 11** — page transitions, flashcard flip, pomodoro ring
-- **Recharts 2** — score history & weak topics charts
-- **React Hot Toast** — slide-in notifications
-- **Lucide React** — icon system
-- **React Markdown** — AI notes rendering
+Planned evolution:
 
-## Available Scripts
+Backend (Node + DB) for multi-user sync
+Auth + RBAC
+WebSocket layer for real-time collaboration
+AI response caching + streaming
+Micro-frontend split per role
+🧪 What This Project Demonstrates
+Multi-role system design
+AI-first product architecture
+State management at scale (frontend-only)
+Modular UI engineering
+Real-world feature composition
+🚫 Repository Hygiene
+dist/
+node_modules/
+.env
+📌 Positioning
 
-| Script | Description |
-|---|---|
-| `npm run dev` | Start dev server |
-| `npm run build` | Production build |
-| `npm run preview` | Preview production build |
+MINXY is not a UI demo—it is a system design prototype for next-gen ed-tech platforms integrating AI at the workflow level.
 
-## Design System
-
-| Token | Value | Usage |
-|---|---|---|
-| `bg` | `#0e0f14` | Page background |
-| `surface` | `#16181f` | Cards |
-| `accent` | `#f5c842` | Gold — primary highlight |
-| `purple` | `#8b7cf8` | Teacher role |
-| `teal` | `#3dcfb4` | Buddy role |
-| `blue` | `#5baef5` | Parent role |
+🧭 Next Targets (High Impact)
+Deploy (Vercel + edge functions)
+Add backend sync layer
+Introduce real-time collaboration
+Optimize AI cost + latency
+Convert into mobile-first UX
